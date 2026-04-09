@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Kabita Kunj</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        /* Dropdown Styling */
+        #input-container { position: relative; }
+        #dropdown-menu {
+            position: absolute;
+            bottom: 100%; /* Shows above the input box */
+            left: 0;
+            width: 100%;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-shadow: 0 -4px 10px rgba(0,0,0,0.1);
+            display: none; /* Hidden by default */
+            z-index: 1000;
+            overflow: hidden;
+        }
+        .dropdown-item {
+            padding: 10px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+            font-family: 'Arial', sans-serif;
+        }
+        .dropdown-item:hover, .dropdown-item.active {
+            background-color: #f0f7ff;
+            color: #007bff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Kabita Kunj</h1>
+        <div id="status">Remaining: <span id="rem-formula">lSSlSSlSSlSS</span></div>
+        <div id="poem-canvas"></div>
+        
+        <div id="suggestion-box"><div id="word-suggestions"></div></div>
+
+        <div class="input-area" id="input-container">
+            <div id="dropdown-menu"></div>
+            
+            <input type="text" id="roman-input" placeholder="Type Romanized (e.g., 'sake')..." autocomplete="off">
+            <p class="hint">Type and use <b>Arrow Keys</b> + <b>Enter</b> or <b>Space</b></p>
+        </div>
+    </div>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
