@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify, render_template
 import json
 import random
 import os
+from collections import defaultdict
 
 app = Flask(__name__)
 
@@ -62,17 +63,34 @@ def word_to_l_s(word):
         weights.append("S" if is_s else "l")
     return "".join(weights)
 
-# --- DATA LOADING ---
+# --- DATA STORAGE & PRECOMPUTATION ---
 VOC_PATH = r"C:\Users\lekhp\OneDrive\Desktop\clean_nepali_words.json"
-voc = []
-prim_voc = {}
+voc_data = []
+rhythm_map = defaultdict(list)
+rhyme_tail_map = defaultdict(list)
+word_info = {}
 
-if os.path.exists(VOC_PATH):
-    with open(VOC_PATH, encoding="utf-8") as f:
-        voc = json.load(f)
-    for word in voc:
-        rhythm = word_to_l_s(word)
-        prim_voc.setdefault(rhythm, []).append(word)
+def precompute_vocabulary():
+    """Processes the vocabulary into hash maps for O(1) API response times."""
+    global voc_data
+    if os.path.exists(VOC_PATH):
+        with open(VOC_PATH, encoding="utf-8") as f:
+            voc_data = json.load(f)
+        
+        for word in voc_data:
+            prims = get_word_primitives(word)
+            rhythm = word_to_l_s(word)
+            syl_count = len(rhythm)
+            
+            word_info[word] = {"rhythm": rhythm, "prims": prims}
+            rhythm_map[rhythm].append(word)
+            
+            if len(prims) >= 2:
+                tail = tuple(prims[-2:])
+                rhyme_tail_map[(syl_count, tail)].append(word)
+
+# Load data at startup
+precompute_vocabulary()
 
 @app.route('/')
 def index():
@@ -82,53 +100,53 @@ def index():
 def predict():
     data = request.json
     rem = data.get('formula', "")
-    target_syl = data.get('syllable_count', 3) 
-    suggestions = []
-    if len(rem) >= target_syl:
-        prefix = rem[:target_syl]
-        if prefix in prim_voc:
-            suggestions.extend(prim_voc[prefix])
+    target_syl = int(data.get('syllable_count', 3)) 
+    
+    if len(rem) < target_syl:
+        return jsonify({"suggestions": []})
+
+    prefix = rem[:target_syl]
+    suggestions = rhythm_map.get(prefix, [])
     return jsonify({"suggestions": random.sample(suggestions, min(len(suggestions), 30))})
 
 @app.route('/get_rhymes', methods=['POST'])
 def get_rhymes():
     target_word = request.json.get('word', "")
-    target_prims = get_word_primitives(target_word)
-    target_rhythm = word_to_l_s(target_word) # Get the syllable pattern
-    target_syl_count = len(target_rhythm)
+    info = word_info.get(target_word)
     
-    rhyme_list = []
+    if not info:
+        prims = get_word_primitives(target_word)
+        rhythm = word_to_l_s(target_word)
+        syl_count = len(rhythm)
+    else:
+        prims = info['prims']
+        syl_count = len(info['rhythm'])
 
-    for word in voc:
-        if word == target_word: 
-            continue
-            
-        # Optimization: Only process words with the same number of syllables
-        # Each char in l/S string represents one syllable
-        word_rhythm = word_to_l_s(word)
-        if len(word_rhythm) != target_syl_count:
-            continue
+    if len(prims) < 2:
+        return jsonify({"rhymes": []})
 
-        word_prims = get_word_primitives(word)
+    tail = tuple(prims[-2:])
+    # Only look at words with the same syllable count and ending primitives
+    potential_rhymes = rhyme_tail_map.get((syl_count, tail), [])
+    
+    scored_rhymes = []
+    for word in potential_rhymes:
+        if word == target_word: continue
+        w_prims = word_info[word]['prims']
         match_count = 0
-        
-        # Count matching primitives from the end (phonetic rhyme)
-        for p1, p2 in zip(reversed(target_prims), reversed(word_prims)):
-            if p1 == p2: 
-                match_count += 1
-            else: 
-                break
-        
-        if match_count >= 2:
-            rhyme_list.append({"word": word, "score": match_count})
+        for p1, p2 in zip(reversed(prims), reversed(w_prims)):
+            if p1 == p2: match_count += 1
+            else: break
+        scored_rhymes.append((word, match_count))
 
-    # Sort by the best phonetic match
-    rhyme_list.sort(key=lambda x: x['score'], reverse=True)
-    return jsonify({"rhymes": [r['word'] for r in rhyme_list[:20]]})
+    scored_rhymes.sort(key=lambda x: x[1], reverse=True)
+    return jsonify({"rhymes": [r[0] for r in scored_rhymes[:20]]})
 
 @app.route('/get_rhythm', methods=['POST'])
 def get_rhythm():
     word = request.json.get('word', "")
+    if word in word_info:
+        return jsonify({"rhythm": word_info[word]['rhythm']})
     return jsonify({"rhythm": word_to_l_s(word)})
 
 if __name__ == '__main__':

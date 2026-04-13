@@ -1,7 +1,6 @@
 let fullFormula = document.getElementById('formula-input').value;
 let remainingFormula = fullFormula;
 let poemWords = []; 
-let selectedIdx = 0;
 
 const formulaDisplay = document.getElementById('rem-formula');
 const formulaInput = document.getElementById('formula-input');
@@ -14,6 +13,7 @@ const dropdown = document.getElementById('dropdown-menu');
 const sylSlider = document.getElementById('syl-slider');
 const sylValDisplay = document.getElementById('syl-val');
 
+// --- 1. Settings & Reset ---
 updateBtn.onclick = () => {
     fullFormula = formulaInput.value.trim();
     remainingFormula = fullFormula;
@@ -27,6 +27,22 @@ sylSlider.oninput = () => {
     updateSuggestions(); 
 };
 
+// --- 2. Backspace & Shuffle ---
+document.getElementById('backspace-btn').onclick = () => {
+    if (poemWords.length === 0) return;
+    const lastEntry = poemWords.pop();
+    if (lastEntry.endOfLine) {
+        remainingFormula = lastEntry.rhythm;
+    } else {
+        remainingFormula = lastEntry.rhythm + remainingFormula;
+    }
+    renderPoem();
+    updateSuggestions();
+};
+
+document.getElementById('refresh-suggestions').onclick = updateSuggestions;
+
+// --- 3. Poem Rendering ---
 function renderPoem() {
     formulaDisplay.innerText = remainingFormula;
     let canvasText = "";
@@ -37,6 +53,7 @@ function renderPoem() {
     poemCanvas.innerText = canvasText;
 }
 
+// --- 4. Word Selection & API ---
 async function selectWord(word) {
     const response = await fetch('/get_rhythm', {
         method: 'POST',
@@ -50,12 +67,13 @@ async function selectWord(word) {
         remainingFormula = remainingFormula.substring(rhythm.length);
         let isEndOfLine = remainingFormula.length === 0;
         if (isEndOfLine) remainingFormula = fullFormula; 
+        
         poemWords.push({ word: word, rhythm: rhythm, endOfLine: isEndOfLine });
         renderPoem();
         updateSuggestions();
-        fetchRhymes(word); // Load rhymes for the word we just picked
+        fetchRhymes(word); 
     } else {
-        alert("Doesn't fit rhythm!");
+        alert(`"${word}" (${rhythm}) does not fit the pattern "${remainingFormula}"`);
     }
 }
 
@@ -67,6 +85,12 @@ async function fetchRhymes(word) {
     });
     const data = await response.json();
     rhymeBox.innerHTML = '';
+    
+    if (data.rhymes.length === 0) {
+        rhymeBox.innerHTML = '<p style="color:gray; font-size:0.8em;">No matches found.</p>';
+        return;
+    }
+
     data.rhymes.forEach(rw => {
         const btn = document.createElement('button');
         btn.className = 'rhyme-btn';
@@ -96,29 +120,32 @@ async function updateSuggestions() {
     });
 }
 
-// Transliteration logic...
+// --- 5. Transliteration ---
 romanInput.oninput = async (e) => {
     const text = e.target.value.trim();
     if (!text) { dropdown.style.display = 'none'; return; }
+    
     const url = `https://inputtools.google.com/request?text=${text}&itc=ne-t-i0-und&num=5&cp=0&cs=1&ie=utf-8&oe=utf-8&app=test`;
-    const response = await fetch(url);
-    const data = await response.json();
-    if (data[0] === "SUCCESS") {
-        const options = data[1][0][1];
-        dropdown.innerHTML = '';
-        options.forEach(opt => {
-            const div = document.createElement('div');
-            div.className = 'dropdown-item';
-            div.innerText = opt;
-            div.onclick = () => {
-                dropdown.style.display = 'none';
-                romanInput.value = '';
-                selectWord(opt);
-            };
-            dropdown.appendChild(div);
-        });
-        dropdown.style.display = 'block';
-    }
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+        if (data[0] === "SUCCESS") {
+            const options = data[1][0][1];
+            dropdown.innerHTML = '';
+            options.forEach(opt => {
+                const div = document.createElement('div');
+                div.className = 'dropdown-item';
+                div.innerText = opt;
+                div.onclick = () => {
+                    dropdown.style.display = 'none';
+                    romanInput.value = '';
+                    selectWord(opt);
+                };
+                dropdown.appendChild(div);
+            });
+            dropdown.style.display = 'block';
+        }
+    } catch (err) { console.error(err); }
 };
 
 window.onload = updateSuggestions;
