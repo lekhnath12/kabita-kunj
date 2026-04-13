@@ -51,11 +51,9 @@ def word_to_l_s(word):
         is_s = v in guru_vowels
         v_idx = syl.index(v) if v in syl else -1
         
-        # Rule: Trailing half-consonant (e.g., 'निर्')
         if not is_s and any(p.endswith('्') for p in syl[v_idx+1:]):
             is_s = True
             
-        # Rule: Cluster Promotion (2+ consonants in next syllable)
         if not is_s and idx + 1 < len(syllables):
             next_syl = syllables[idx + 1]
             consonant_count = 0
@@ -69,7 +67,7 @@ def word_to_l_s(word):
     return "".join(weights)
 
 # --- DATA LOADING ---
-VOC_PATH = r"C:\Users\lekhp\OneDrive\Desktop\clean_nepali_words.json" #
+VOC_PATH = r"C:\Users\lekhp\OneDrive\Desktop\clean_nepali_words.json"
 prim_voc = {}
 
 if os.path.exists(VOC_PATH):
@@ -85,13 +83,18 @@ def index():
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    rem = request.json.get('formula', "")
+    data = request.json
+    rem = data.get('formula', "")
+    # The slider value tells us how many syllables (characters in the rhythm string) to match
+    target_syl = data.get('syllable_count', 3) 
+    
     suggestions = []
-    for length in range(1, min(7, len(rem) + 1)):
-        prefix = rem[:length]
+    if len(rem) >= target_syl:
+        prefix = rem[:target_syl]
         if prefix in prim_voc:
             suggestions.extend(prim_voc[prefix])
-    return jsonify({"suggestions": random.sample(suggestions, min(len(suggestions), 20))})
+            
+    return jsonify({"suggestions": random.sample(suggestions, min(len(suggestions), 30))})
 
 @app.route('/get_rhythm', methods=['POST'])
 def get_rhythm():

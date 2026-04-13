@@ -5,12 +5,15 @@ import time
 import json
 from collections import deque
 
-def crawl_round_robin(start_urls, max_total_pages=100):
-    unique_vocab = set()
+def crawl_round_robin(start_urls, max_total_pages=100, save_path="clean_nepali_words.json"):
+    # Load existing data at the start to ensure we are appending, not overwriting
+    try:
+        with open(save_path, "r", encoding="utf-8") as f:
+            unique_vocab = set(json.load(f))
+    except (FileNotFoundError, json.JSONDecodeError):
+        unique_vocab = set()
+
     visited_links = set()
-    
-    # Create a dictionary where each key is a portal and each value is a deque (queue)
-    # This allows us to track links for each site independently
     portal_queues = {url: deque([url]) for url in start_urls}
     portal_list = list(start_urls)
     
@@ -18,19 +21,15 @@ def crawl_round_robin(start_urls, max_total_pages=100):
     digit_pattern = re.compile(r'[\u0966-\u096F0-9\u0964]')
     
     pages_crawled = 0
-    portal_index = 0 # To track whose turn it is
+    portal_index = 0 
 
     print(f"--- Starting Round Robin Crawl across {len(start_urls)} portals ---")
 
     while pages_crawled < max_total_pages and any(portal_queues.values()):
-        # 1. Determine whose turn it is
         current_base = portal_list[portal_index]
         current_queue = portal_queues[current_base]
-
-        # Move to the next portal index for the next iteration (Round Robin)
         portal_index = (portal_index + 1) % len(portal_list)
 
-        # 2. If the current portal has no more links, skip to the next
         if not current_queue:
             continue
             
@@ -46,15 +45,12 @@ def crawl_round_robin(start_urls, max_total_pages=100):
                 continue
 
             soup = BeautifulSoup(response.content, 'html.parser')
-            
-            # 3. Extract Words
             text = soup.get_text()
             found_words = nepali_pattern.findall(text)
             for w in found_words:
                 if not digit_pattern.search(w) and len(w) > 1:
                     unique_vocab.add(w)
 
-            # 4. Find internal links and add them ONLY to this portal's specific queue
             for a_tag in soup.find_all('a', href=True):
                 link = a_tag['href']
                 if link.startswith('/') or current_base in link:
@@ -63,14 +59,23 @@ def crawl_round_robin(start_urls, max_total_pages=100):
                         portal_queues[current_base].append(full_link)
 
             pages_crawled += 1
-            print(f"[{pages_crawled}] Turn: {current_base} | Scraped: {url} | Total Vocab: {len(unique_vocab)}")
+            
+            # --- Save every 100 URLs inside the function ---
+            if pages_crawled % 10 == 0:
+                with open(save_path, "w", encoding="utf-8") as f:
+                    json.dump(sorted(list(unique_vocab)), f, ensure_ascii=False)
+                print(f"--- AUTO-SAVE: File updated at {pages_crawled} URLs --- with unique words {len(unique_vocab)}")
 
         except Exception as e:
-            print(f"Skipping {url} due to error.")
+            print(f"Skipping {url} due to error: {e}")
 
+    # Final save before exiting the function
+    with open(save_path, "w", encoding="utf-8") as f:
+        json.dump(sorted(list(unique_vocab)), f, ensure_ascii=False, indent=2)
+    
     return list(unique_vocab)
 
-
+# --- Main Execution ---
 news_portals = [
     # General / Mainstream
     "https://www.onlinekhabar.com",
@@ -112,14 +117,8 @@ news_portals = [
 ]
 
 
-# Run the round-robin scraper
-voc = json.load(open(r"C:\Users\lekhp\OneDrive\Desktop\clean_nepali_words.json", encoding="utf-8"))
+# Note: Update 'path_to_file' if you want
+# Note: Update 'path_to_file' if you want to use the specific OneDrive path
+path_to_file = "clean_nepali_words.json" 
 
-
-new_words = crawl_round_robin(news_portals, max_total_pages=1000)
-voc += new_words
-voc = list(set(voc)) # Remove duplicates
-voc = sorted(voc) # Sort by length (optional)
-# Save results as before
-with open("clean_nepali_words.json", "w", encoding="utf-8") as f:
-    json.dump(voc, f, ensure_ascii=False, indent=2)
+crawl_round_robin(news_portals, max_total_pages=1000000, save_path=path_to_file)

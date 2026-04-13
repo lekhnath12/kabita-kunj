@@ -14,8 +14,12 @@
             <div class="setting-group">
                 <label><b>Chhanda Rhythm:</b></label>
                 <input type="text" id="formula-input" value="lSSlSSlSSlSS" placeholder="e.g. lSlSSllSlSS">
-                <button class="btn-update" id="update-formula">Update & Reset</button>
             </div>
+            <div class="setting-group">
+                <label><b>Syllables:</b> <span id="syl-val">3</span></label>
+                <input type="range" id="syl-slider" min="1" max="5" value="3" step="1">
+            </div>
+            <button class="btn-update" id="update-formula">Update & Reset</button>
         </div>
 
         <div id="status">Current Line Needs: <span id="rem-formula">lSSlSSlSSlSS</span></div>
